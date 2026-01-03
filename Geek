@@ -1488,16 +1488,6 @@ local Library do
 
     local IsMobile = UserInputService.TouchEnabled or false
 
-    -- Auto UI Scale based on device
-local UIScale = Instance.new("UIScale")
-UIScale.Parent = Library.Holder.Instance  -- or your main frame if you have one
-
-if IsMobile then
-    UIScale.Scale = 0.65  -- 75% size on mobile - adjust as needed (0.7 for smaller, 0.8 for slightly bigger)
-else
-    UIScale.Scale = 1.0   -- Full size on PC
-end
-
 -- Optional: Make it dynamic if device changes (rare, but good for emulators)
 Library:Connect(UserInputService.TouchEnabledChanged, function(enabled)
     UIScale.Scale = enabled and 0.75 or 1.0
@@ -2218,6 +2208,23 @@ end)
         DisplayOrder = 2,
         ResetOnSpawn = false
     })
+
+-- === MOBILE / PC UI SCALING FIX ===
+local UIScale = Instance.new("UIScale")
+UIScale.Parent = Library.Holder.Instance  -- Now safe because Holder was just created
+
+if IsMobile then
+    UIScale.Scale = 0.65  -- Perfect balance for mobile: smaller but still readable/tappable
+else
+    UIScale.Scale = 1.0   -- Full size on PC (your current "good" size)
+end
+
+-- Optional: Update scale if device type changes (e.g. emulator toggle)
+Library:Connect(UserInputService.TouchEnabledChanged, function(touchEnabled)
+    UIScale.Scale = touchEnabled and 0.78 or 1.0
+end)
+-- ==================================
+
 
     Library.UnusedHolder = Instances:Create("ScreenGui", {
         Parent = gethui(),
