@@ -1488,10 +1488,6 @@ local Library do
 
     local IsMobile = UserInputService.TouchEnabled or false
 
--- Optional: Make it dynamic if device changes (rare, but good for emulators)
-Library:Connect(UserInputService.TouchEnabledChanged, function(enabled)
-    UIScale.Scale = enabled and 0.75 or 1.0
-end)
 
     gethui = gethui or function()
         return CoreGui
