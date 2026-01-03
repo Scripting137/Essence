@@ -1488,6 +1488,7 @@ local Library do
 
     local IsMobile = UserInputService.TouchEnabled or false
 
+
     gethui = gethui or function()
         return CoreGui
     end
@@ -2203,6 +2204,16 @@ local Library do
         DisplayOrder = 2,
         ResetOnSpawn = false
     })
+
+-- === MOBILE / PC UI SCALING FIX ===
+local UIScale = Instance.new("UIScale")
+UIScale.Parent = Library.Holder.Instance  -- Now safe because Holder was just created
+
+if IsMobile then
+    UIScale.Scale = 0.73  -- Perfect balance for mobile: smaller but still readable/tappable
+else
+    UIScale.Scale = 1.0   -- Full size on PC (your current "good" size)
+end
 
     Library.UnusedHolder = Instances:Create("ScreenGui", {
         Parent = gethui(),
@@ -7737,8 +7748,8 @@ local Library do
                     Items["MainFrame"].Instance.Visible = Bool
 
                     if Window.IsOpen then
-                        Items["MouseImage"].Instance.Visible = true
-                        UserInputService.MouseIconEnabled = false 
+                        Items["MouseImage"].Instance.Visible = false
+                        UserInputService.MouseIconEnabled = true 
                     else
                         Items["MouseImage"].Instance.Visible = false
                         UserInputService.MouseIconEnabled = true 
@@ -10111,6 +10122,10 @@ local Library do
         end
     end
 end 
+
+
+
+Library:Init() -- put this at the end of ur script or the autoload will not work
 
 getgenv().Library = Library
 return Library
