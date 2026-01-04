@@ -1,0 +1,230 @@
+
+
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting137/Nevox/refs/heads/main/Ui"))()
+local rs = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+local PathfindingService = game:GetService("PathfindingService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+
+local packets = require(rs.Modules.Packets)
+
+
+local plr = Players.LocalPlayer
+local char = plr.Character or plr.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+
+local goldFarmEnabled = false
+local pointsVisible = true
+local tweenSpeed = 16
+local goldFarmPoints = {} 
+local pointMarkers = {}
+local pathBeams = {}
+local activeTween = nil
+
+
+local CONFIG_URL = "https://raw.githubusercontent.com/Scripting137/Essence/refs/heads/main/Config1"
+
+
+local function updatePathVisuals()
+    for _, v in pairs(pointMarkers) do v:Destroy() end
+    for _, v in pairs(pathBeams) do v:Destroy() end
+    pointMarkers = {}
+    pathBeams = {}
+    
+    if not pointsVisible then return end
+
+    for i, pos in ipairs(goldFarmPoints) do
+        local marker = Instance.new("Part")
+        marker.Size = Vector3.new(1.1, 1.1, 1.1)
+        marker.Position = pos
+        marker.Anchored = true
+        marker.CanCollide = false
+        marker.Transparency = 0.65
+        marker.Material = Enum.Material.Neon
+        marker.Color = Color3.fromRGB(255, 215, 0)
+        marker.Shape = Enum.PartType.Ball
+        marker.Parent = workspace
+        
+        local bgui = Instance.new("BillboardGui", marker)
+        bgui.AlwaysOnTop = true
+        bgui.Size = UDim2.new(0, 30, 0, 30)
+        bgui.ExtentsOffset = Vector3.new(0, 2, 0)
+        local lbl = Instance.new("TextLabel", bgui)
+        lbl.BackgroundTransparency = 1
+        lbl.Size = UDim2.new(1, 0, 1, 0)
+        lbl.Text = tostring(i)
+        lbl.TextColor3 = Color3.new(1, 1, 1)
+        lbl.TextSize = 11
+        lbl.Font = Enum.Font.GothamBold
+        table.insert(pointMarkers, marker)
+        
+        if i < #goldFarmPoints then
+            local nextPos = goldFarmPoints[i+1]
+            local dist = (pos - nextPos).Magnitude
+            local beam = Instance.new("Part")
+            beam.Size = Vector3.new(0.05, 0.05, dist)
+            beam.CFrame = CFrame.new(pos:Lerp(nextPos, 0.5), nextPos)
+            beam.Anchored = true
+            beam.CanCollide = false
+            beam.Color = Color3.fromRGB(200, 200, 200)
+            beam.Transparency = 0.9
+            beam.Parent = workspace
+            table.insert(pathBeams, beam)
+        end
+    end
+end
+
+
+local function walkTo(targetPos)
+    if not goldFarmEnabled then return end
+    
+    local path = PathfindingService:CreatePath({AgentRadius = 2, AgentHeight = 5, AgentCanJump = true})
+    path:ComputeAsync(root.Position, targetPos)
+    local waypoints = (path.Status == Enum.PathStatus.Success) and path:GetWaypoints() or {{Position = targetPos}}
+
+    for _, wp in ipairs(waypoints) do
+        if not goldFarmEnabled then break end
+        local startPos = root.Position
+        local dist = (root.Position - wp.Position).Magnitude
+        
+        if dist < 1.0 then continue end 
+
+        activeTween = TweenService:Create(root, TweenInfo.new(dist / tweenSpeed, Enum.EasingStyle.Linear), {CFrame = CFrame.new(wp.Position + Vector3.new(0, 3, 0))})
+        activeTween:Play()
+        
+        local rubberbanded = false
+        local checkTask = task.spawn(function()
+            while activeTween and goldFarmEnabled do
+                if (root.Position - startPos).Magnitude > (dist + 12) then
+                    rubberbanded = true
+                    activeTween:Cancel()
+                    break
+                end
+                task.wait(0.05)
+            end
+        end)
+        
+        activeTween.Completed:Wait()
+        task.cancel(checkTask)
+        activeTween = nil
+        if rubberbanded then task.wait(2) return end
+    end
+end
+
+
+local function fetchConfig()
+    local success, content = pcall(function()
+        return game:HttpGet(CONFIG_URL)
+    end)
+    
+    if success then
+        local decodeSuccess, data = pcall(function() return HttpService:JSONDecode(content) end)
+        if decodeSuccess then
+            goldFarmPoints = {}
+            for _, v in ipairs(data) do
+                table.insert(goldFarmPoints, Vector3.new(v.x or v[1], v.y or v[2], v.z or v[3]))
+            end
+            updatePathVisuals()
+            print("Config successfully loaded from GitHub.")
+        else
+            warn("Failed to decode GitHub JSON.")
+        end
+    else
+        warn("Failed to fetch GitHub Config.")
+    end
+end
+
+
+local function farmAtPoint()
+    local startTime = tick()
+    local resources = workspace:FindFirstChild("Resources")
+    
+    while goldFarmEnabled and (tick() - startTime < 12) do
+        local target = nil
+        
+        if resources then
+            for _, v in ipairs(resources:GetChildren()) do
+                if (v.Name == "Gold Node" or v.Name == "Ice Chunk") then
+                    if (v:GetPivot().Position - root.Position).Magnitude < 16 then
+                        target = v
+                        break
+                    end
+                end
+            end
+        end
+        
+        if target then
+            packets.SwingTool.send({target:GetAttribute("EntityID")})
+            task.wait(0.18)
+            
+            local items = workspace:FindFirstChild("Items")
+            if items then
+                for _, item in ipairs(items:GetChildren()) do
+                    if item.Name == "Raw Gold" and (item:GetPivot().Position - root.Position).Magnitude < 20 then
+                        packets.Pickup.send(item:GetAttribute("EntityID"))
+                    end
+                end
+            end
+        else
+            break 
+        end
+        task.wait(0.05)
+    end
+end
+
+
+local Window = Library:Window({Name = "Nevox Essence", SubName = "V11 GitHub Build", Logo = "120959262762131"})
+local Page = Window:Page({Name = "Farm"})
+local Sect = Page:Section({Name = "Controls", Side = 1})
+
+Sect:Toggle({
+    Name = "Master Gold Farm",
+    Callback = function(v) 
+        goldFarmEnabled = v 
+        if not v and activeTween then activeTween:Cancel() end
+    end
+})
+
+Sect:Slider({
+    Name = "Speed", 
+    Min = 10, 
+    Max = 24, -- Capped at 24
+    Default = 16, 
+    Callback = function(v) tweenSpeed = v end
+})
+
+Sect:Toggle({
+    Name = "Show Point Visuals",
+    Default = true,
+    Callback = function(v) 
+        pointsVisible = v 
+        updatePathVisuals() 
+    end
+})
+
+Sect:Button({
+    Name = "Force Reload GitHub",
+    Callback = fetchConfig
+})
+
+task.spawn(function()
+    fetchConfig()
+    while true do
+        task.wait(0.5)
+        if goldFarmEnabled and #goldFarmPoints > 0 then
+            for i = 1, #goldFarmPoints do
+                if not goldFarmEnabled then break end
+                
+                walkTo(goldFarmPoints[i])
+                farmAtPoint()
+                
+                if i == #goldFarmPoints and goldFarmEnabled then
+                    task.wait(25)
+                end
+            end
+        end
+    end
+end)
+
+Window:Init()
